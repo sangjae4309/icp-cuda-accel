@@ -2,7 +2,7 @@
 
 namespace icp {
 
-// 5단계: T_next = delta * T_current (왼쪽 합성).
+// Step 5: T_next = delta * T_current (left composition).
 Pose compose(const Pose& delta, const Pose& pose) {
     Pose updated;
 

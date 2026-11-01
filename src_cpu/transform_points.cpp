@@ -3,7 +3,7 @@
 namespace icp {
 
 Point transform_point(const Pose& pose, Point point) {
-    // GPU와 동일하게 점 변환은 float로 계산합니다.
+    // Use float arithmetic for point transforms, matching the GPU.
     float r[9];
     float t[3];
     for (int k = 0; k < 9; ++k) {
@@ -20,7 +20,7 @@ Point transform_point(const Pose& pose, Point point) {
     };
 }
 
-// 1단계: 원본 source에 현재 pose를 적용합니다.
+// Step 1: Apply the current pose to the original source.
 void transform_points(const Cloud& source, const Pose& pose, Cloud& current) {
     current.resize(source.size());
     for (std::size_t i = 0; i < source.size(); ++i) {

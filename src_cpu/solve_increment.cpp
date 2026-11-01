@@ -4,7 +4,7 @@
 
 namespace icp {
 
-// 4단계: 중심점과 공분산을 구성하고 SVD로 증분 변환을 구합니다.
+// Step 4: Compute centroids and covariance, then estimate the increment using SVD.
 Pose solve_increment(const Stats& stats) {
     const double count = stats.v[0];
     if (count < 3) {

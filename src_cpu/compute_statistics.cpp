@@ -2,7 +2,7 @@
 
 namespace icp {
 
-// 3단계: 대응점 개수, 좌표 합, 외적 합, 거리 제곱 합을 double로 누적합니다.
+// Step 3: Accumulate counts, coordinate sums, outer products, and squared distances in double precision.
 Stats serial_stats(const Cloud& current, const Cloud& target, const Matches& matches) {
     Stats stats;
 

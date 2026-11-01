@@ -3,7 +3,7 @@
 
 namespace icp {
 
-// 2단계: 각 source 점에서 가장 가까운 target 점을 찾습니다.
+// Step 2: Find the nearest target point for each source point.
 void find_correspondences(const Cloud& current, const Cloud& target,
                           float max_squared_distance, Matches& matches) {
     matches.index.resize(current.size());
@@ -19,7 +19,7 @@ void find_correspondences(const Cloud& current, const Cloud& target,
             float dz = current[i].z - target[j].z;
             float distance = dx * dx + dy * dy + dz * dz;
 
-            // 같은 거리라면 먼저 찾은 작은 인덱스를 유지합니다.
+            // Keep the smaller index when distances are equal.
             if (distance < best_distance) {
                 best_distance = distance;
                 best_index = int(j);

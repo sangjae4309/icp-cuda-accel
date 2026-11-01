@@ -15,7 +15,7 @@ Result run(const Cloud& source, const Cloud& target, const Options& options) {
     if (options.iterations < 1 || !std::isfinite(options.max_distance) || options.max_distance <= 0 || options.max_distance > std::sqrt(FLT_MAX)) {
         throw std::runtime_error("Invalid iteration count or max distance");
     }
-    // 입력 점의 유한성은 read_cloud에서 검사합니다.
+    // read_cloud validates that input coordinates are finite.
     Result result;
     result.backend = "cpu";
     result.source_points = source.size();
@@ -33,7 +33,7 @@ Result run(const Cloud& source, const Cloud& target, const Options& options) {
         Step step = backend->evaluate(result.pose);
         const double solve_start = now_ms();
         Pose delta = solve_increment(step.stats);
-        // 현재 변환된 source에 맞춘 delta를 왼쪽에 합성합니다.
+        // Left-compose the increment fitted to the currently transformed source.
         result.pose = compose(delta, result.pose);
 
         Iteration iteration;
@@ -54,7 +54,7 @@ Result run(const Cloud& source, const Cloud& target, const Options& options) {
     result.loop_wall_ms = now_ms() - loop_start;
 
     const double eval_start = now_ms();
-    // 최종 pose로 대응점을 다시 구한 뒤 RMSE를 계산합니다.
+    // Recompute correspondences at the final pose before calculating RMSE.
     Step final_step = backend->evaluate(result.pose);
     result.final_inliers = int(final_step.stats.v[0]);
     if (result.final_inliers < 3) {
