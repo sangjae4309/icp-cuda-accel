@@ -1,11 +1,11 @@
-#include "icp/icp.hpp"
+#include "icp.hpp"
 #include <iostream>
 #include <exception>
 #include <string>
 
 static void usage() {
     std::cout << "Usage: icp_run --source P.xyz --target Q.xyz [options]\n"
-              << "  --backend cpu|cuda-naive|cuda-tiled  (default cpu)\n"
+              << "  --backend cuda-naive|cuda-tiled  (default cuda-tiled)\n"
               << "  --iterations 20 --max-distance 1.0 --fixed-iters\n"
               << "  --initial T_target_source.txt --output results/run.json\n"
               << "All lengths use the input cloud's units (KITTI: meters).\n";
@@ -14,7 +14,7 @@ static void usage() {
 int main(int argc, char** argv) {
     try {
         icp::Options options;
-        std::string source, target, backend = "cpu", output = "results/run.json";
+        std::string source, target, backend = "cuda-tiled", output = "results/run.json";
         for (int i = 1; i<argc; ++i) {
             std::string arg = argv[i];
             if (arg == "--help" || arg == "-h") {
@@ -76,15 +76,11 @@ int main(int argc, char** argv) {
         if (pairs>1e8) {
             std::cerr << "WARNING: " << pairs << " pair distances per iteration. Downsample first.\n";
         }
-        icp::Result result;
-        if (backend == "cpu") {
-            result = icp::run(source_cloud, target_cloud, options);
-        } else if (backend == "cuda-naive" || backend == "cuda-tiled") {
-            result = icp::run_cuda(source_cloud, target_cloud, options, backend == "cuda-tiled");
-        } else {
-            std::cerr << "Unknown backend: " << backend << "\n";
+        if (backend != "cuda-naive" && backend != "cuda-tiled") {
+            std::cerr << "Unsupported backend for this executable: " << backend << "\n";
             return 2;
         }
+        auto result = icp::run_cuda(source_cloud, target_cloud, options, backend == "cuda-tiled");
         icp::write_result(output, result, options);
         std::cout << "backend=" << backend << " points=" << source_cloud.size() << "x" << target_cloud.size() << " iterations=" << result.trace.size() << " final_inliers=" << result.final_inliers << " final_rmse=" << result.final_rmse << " loop_ms=" << result.loop_wall_ms << " registration_ms=" << result.registration_wall_ms << "\nSaved " << output << "\n";
         return 0;

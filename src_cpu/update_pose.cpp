@@ -1,4 +1,4 @@
-#include "icp/icp.hpp"
+#include "icp.hpp"
 
 namespace icp {
 

@@ -12,7 +12,8 @@ from evaluate import pose_error
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument('--exe', type=Path, default=Path('build/icp_run'))
+    p.add_argument('--cpu-exe', type=Path, default=Path('build-cpu/icp_run'))
+    p.add_argument('--gpu-exe', type=Path, default=Path('build-gpu/icp_run'))
     p.add_argument('--backends', nargs='+', choices=['cpu','cuda-naive','cuda-tiled'], default=['cpu'])
     p.add_argument('--sizes', nargs='+', type=int, default=[512, 1024, 2048, 4096])
     p.add_argument('--repeats', type=int, default=5)
@@ -34,7 +35,8 @@ def main():
             for backend in a.backends:
                 for rep in range(a.repeats):
                     out = a.out / f'{backend}_{n}_{rep}.json'
-                    cmd = [str(a.exe.resolve()),'--source',str(data/'source.xyz'),'--target',str(data/'target.xyz'),
+                    exe = a.cpu_exe if backend == 'cpu' else a.gpu_exe
+                    cmd = [str(exe.resolve()),'--source',str(data/'source.xyz'),'--target',str(data/'target.xyz'),
                            '--backend',backend,'--iterations',str(a.iterations),'--max-distance','0.7',
                            '--fixed-iters','--output',str(out)]
                     started = time.perf_counter()

@@ -1,6 +1,6 @@
 // Native CUDA reference + shared-memory tiled correspondence search.
 // No Thrust/CUB/cuICP; no STL containers in device code.
-#include "icp/icp.hpp"
+#include "icp.hpp"
 #include <cuda_runtime.h>
 #include <cfloat>
 #include <stdexcept>

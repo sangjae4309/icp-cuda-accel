@@ -1,16 +1,13 @@
 # CUDA-accelerated SLAM ICP
 
 ```text
-src_cpu/              CPU ICP loop and computation stages
-src_cuda/             CUDA ICP loop and GPU kernels
-src_common/           Shared command-line entry point
-include/icp/          Shared types and function declarations
+src_cpu/              Standalone CPU project: main, headers, ICP stages, and tests
+src_cuda/             Standalone CUDA project: main, headers, GPU kernels, and tests
 scripts/              Data preparation, evaluation, and benchmark tools
-tests/                C++ and Python tests
+tests/                Python tool tests
 data/synthetic_small/ Small synthetic pair with a ground-truth transform
-build-cpu/            CPU build output (ignored by Git)
-build-gpu/            CUDA build output (ignored by Git)
-results/              Execution and validation output (ignored by Git)
 ```
 
-`CMakeLists.txt`: C++/CUDA build configuration. `requirements.txt`: Python dependencies.
+Each implementation has its own `CMakeLists.txt` and `icp.hpp`, with no source or
+header dependencies on the other directory. The root `CMakeLists.txt` selects one
+implementation. `requirements.txt` lists Python tool dependencies.

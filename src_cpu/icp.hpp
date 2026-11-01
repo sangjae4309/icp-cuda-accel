@@ -54,8 +54,6 @@ public:
     virtual Matches matches() const=0; // diagnostic, outside timed loop
 };
 std::unique_ptr<Backend> make_cpu(const Cloud&, const Cloud&, double max_distance);
-std::unique_ptr<Backend> make_cuda(const Cloud&, const Cloud&, double max_distance, bool tiled);
-bool cuda_available();
 double now_ms(); // CLOCK_MONOTONIC; no std::chrono
 Point transform_point(const Pose&, Point);
 void transform_points(const Cloud& source, const Pose&, Cloud& current);
@@ -68,7 +66,6 @@ double translation_norm(const Pose&);
 Stats serial_stats(const Cloud& current, const Cloud& target, const Matches&);
 // Input coordinates must be finite; read_cloud validates file input.
 Result run(const Cloud&, const Cloud&, const Options&);
-Result run_cuda(const Cloud&, const Cloud&, const Options&, bool tiled);
 Cloud read_cloud(const std::string& filename); // .xyz/.txt or KITTI .bin
 Pose read_pose(const std::string& filename);   // 3x4 or 4x4 row-major text
 void write_result(const std::string& filename, const Result&, const Options&);
