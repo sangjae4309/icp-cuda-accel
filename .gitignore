@@ -1,0 +1,46 @@
+# CMake and compiled outputs
+/build*/
+/cmake-build*/
+/CMakeFiles/
+/CMakeCache.txt
+/Testing/
+/compile_commands.json
+*.o
+*.a
+*.so
+
+# Python environments and caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local agent/editor settings and credentials
+/.agents/
+/.codex/
+/.vscode/
+/.idea/
+.env
+.env.*
+!.env.example
+.DS_Store
+*~
+*.swp
+
+# Only the authored synthetic fixture belongs in Git
+/data/*
+!/data/synthetic_small/
+/kitti/
+
+# Generated measurements and machine-specific Slurm jobs
+/results/
+/slurm-*.out
+
+# Local agent instructions and tooling
+AGENTS.md
+AGENTS.local.md
+CLAUDE.md
+/.claude/
+/.cursor/
+/CMakeUserPresets.json

@@ -1,0 +1,9 @@
+{
+  "kind": "synthetic, exact rigid transform, no noise, full overlap",
+  "points": 1024,
+  "seed": 42,
+  "angle_deg": 3.0,
+  "target_permuted": true,
+  "units": "arbitrary length units",
+  "purpose": "correctness test, not evidence of real-world SLAM accuracy"
+}

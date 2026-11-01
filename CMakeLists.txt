@@ -1,0 +1,57 @@
+cmake_minimum_required(VERSION 3.18)
+project(icp_cuda_starter VERSION 0.1.0 LANGUAGES CXX)
+option(ICP_ENABLE_CUDA "Build native CUDA backends" OFF)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+# System package: libeigen3-dev. An explicit include path also works on clusters.
+find_path(EIGEN3_INCLUDE_DIR Eigen/Core PATH_SUFFIXES eigen3
+          HINTS "$ENV{EIGEN3_INCLUDE_DIR}")
+if(NOT EIGEN3_INCLUDE_DIR)
+  message(FATAL_ERROR "Eigen3 headers missing. Install libeigen3-dev or set -DEIGEN3_INCLUDE_DIR=/path/to/eigen3")
+endif()
+add_library(icp_core
+  src_cpu/math.cpp src_cpu/io.cpp src_cpu/cpu_backend.cpp src_cpu/icp_run.cpp
+  src_cpu/transform_points.cpp
+  src_cpu/find_correspondences.cpp
+  src_cpu/compute_statistics.cpp
+  src_cpu/solve_increment.cpp
+  src_cpu/update_pose.cpp)
+# GCC 8 provides C++17 filesystem through a separate library.
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9)
+  target_link_libraries(icp_core PUBLIC stdc++fs)
+endif()
+target_include_directories(icp_core PUBLIC include PRIVATE ${EIGEN3_INCLUDE_DIR})
+target_compile_options(icp_core PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall;-Wextra;-Wpedantic>)
+if(ICP_ENABLE_CUDA)
+  # Select explicitly before enabling the language; avoid compiler defaults.
+  if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+    message(FATAL_ERROR "Pass -DCMAKE_CUDA_ARCHITECTURES=<your GPU CC, e.g. 60>")
+  endif()
+  enable_language(CUDA)
+  find_package(CUDAToolkit REQUIRED)
+  if(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 13.0)
+    foreach(arch ${CMAKE_CUDA_ARCHITECTURES})
+      if(arch MATCHES "^(50|52|53|60|61|62|70)(-real|-virtual)?$")
+        message(FATAL_ERROR "Pre-Turing GPU: use CUDA Toolkit 11/12, not CUDA 13+")
+      endif()
+    endforeach()
+  endif()
+  target_sources(icp_core PRIVATE src_cuda/cuda_backend.cu src_cuda/icp_run.cpp)
+  set_target_properties(icp_core PROPERTIES CUDA_STANDARD 17 CUDA_STANDARD_REQUIRED YES)
+  target_compile_options(icp_core PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-lineinfo>)
+  target_compile_definitions(icp_core PUBLIC ICP_WITH_CUDA=1)
+  target_link_libraries(icp_core PUBLIC CUDA::cudart)
+else()
+  target_sources(icp_core PRIVATE src_cuda/cuda_stub.cpp)
+endif()
+add_executable(icp_run src_common/main.cpp)
+target_link_libraries(icp_run PRIVATE icp_core)
+add_executable(icp_tests tests/test_icp.cpp)
+target_link_libraries(icp_tests PRIVATE icp_core)
+enable_testing()
+add_test(NAME cpu_unit_tests COMMAND icp_tests)
+if(ICP_ENABLE_CUDA)
+  add_test(NAME gpu_equivalence_tests COMMAND icp_tests --gpu)
+  set_tests_properties(gpu_equivalence_tests PROPERTIES SKIP_RETURN_CODE 77 LABELS "gpu")
+endif()
