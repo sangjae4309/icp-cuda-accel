@@ -1,0 +1,20 @@
+{
+  "source": "data/kitti-sample/velodyne/000001.bin",
+  "target": "data/kitti-sample/velodyne/000000.bin",
+  "out": "data/kitti-sample",
+  "max_points": 2048,
+  "voxel_size": 0.2,
+  "min_range": 2.0,
+  "max_range": 60.0,
+  "seed": 42,
+  "counts": {
+    "source": {
+      "original": 124605,
+      "prepared": 2048
+    },
+    "target": {
+      "original": 124668,
+      "prepared": 2048
+    }
+  }
+}
