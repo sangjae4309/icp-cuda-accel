@@ -28,9 +28,8 @@ __pycache__/
 *~
 *.swp
 
-# Only the authored synthetic fixture belongs in Git
+# Local datasets are excluded from Git
 /data/*
-!/data/synthetic_small/
 /kitti/
 
 # Generated measurements and machine-specific Slurm jobs
