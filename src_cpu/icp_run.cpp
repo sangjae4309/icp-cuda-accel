@@ -1,68 +1,73 @@
-#include "icp.hpp"
-#include <climits>
+#include "icp.h"
+#include <cmath>
 #include <cfloat>
-#include <stdexcept>
+#include <limits>
 
-namespace icp {
-
-Result run(const Cloud& source, const Cloud& target, const Options& options) {
-    if (source.empty() || target.empty()) {
-        throw std::runtime_error("Empty source or target");
+IcpStatus runICP(const PointCloud* source, const PointCloud* target,
+    const IcpOptions* o, IcpResult* result) {
+    if (!result) return ICP_INVALID_INPUT;
+    *result = {}; result->status = ICP_INVALID_INPUT;
+    result->final_rmse = std::numeric_limits<double>::quiet_NaN();
+    if (!o || validateCloud(source) != ICP_OK || validateCloud(target) != ICP_OK)
+        return result->status;
+    if (o->backend < BACKEND_CPU || o->backend > BACKEND_CUDA_TILED ||
+        o->max_iterations <= 0 || !std::isfinite(o->max_distance) || o->max_distance <= 0 ||
+        o->max_distance > std::sqrt(double(FLT_MAX)) ||
+        !std::isfinite(o->translation_tolerance) || o->translation_tolerance < 0 ||
+        !std::isfinite(o->rotation_tolerance) || o->rotation_tolerance < 0) return result->status;
+    for (double x : o->initial_pose.R) if (!std::isfinite(x)) return result->status;
+    for (double x : o->initial_pose.t) if (!std::isfinite(x)) return result->status;
+    // Validate a proper initial rotation; this is input validation, not ICP solving.
+    const double* r = o->initial_pose.R;
+    for (int i=0; i<3; ++i) for (int j=0; j<3; ++j) {
+        double dot=0;
+        for (int k=0; k<3; ++k) dot += r[3*k+i]*r[3*k+j];
+        if (std::abs(dot-(i==j ? 1.0 : 0.0)) > 1e-3) return result->status;
     }
-    if (source.size() > INT_MAX || target.size() > INT_MAX) {
-        throw std::runtime_error("Cloud exceeds 32-bit indexing");
-    }
-    if (options.iterations < 1 || !std::isfinite(options.max_distance) || options.max_distance <= 0 || options.max_distance > std::sqrt(FLT_MAX)) {
-        throw std::runtime_error("Invalid iteration count or max distance");
-    }
-    // read_cloud validates that input coordinates are finite.
-    Result result;
-    result.backend = "cpu";
-    result.source_points = source.size();
-    result.target_points = target.size();
-    result.pose = options.initial;
-    result.trace.reserve(options.iterations);
-
-    const double total_start = now_ms();
-    const double setup_start = total_start;
-    auto backend = make_cpu(source, target, options.max_distance);
-    result.setup_ms = now_ms() - setup_start;
-
-    const double loop_start = now_ms();
-    for (int iteration_index = 0; iteration_index < options.iterations; ++iteration_index) {
-        Step step = backend->evaluate(result.pose);
-        const double solve_start = now_ms();
-        Pose delta = solve_increment(step.stats);
-        // Left-compose the increment fitted to the currently transformed source.
-        result.pose = compose(delta, result.pose);
-
-        Iteration iteration;
-        iteration.number = iteration_index;
-        iteration.inliers = int(step.stats.v[0]);
-        iteration.rmse_before_update = std::sqrt(step.stats.v[16] / step.stats.v[0]);
-        iteration.delta_translation = translation_norm(delta);
-        iteration.delta_rotation = rotation_angle(delta);
-        iteration.solve_ms = now_ms() - solve_start;
-        iteration.times = step.times;
-        result.trace.push_back(iteration);
-        result.converged = (iteration.delta_translation < options.translation_tolerance &&
-                            iteration.delta_rotation < options.rotation_tolerance);
-        if (result.converged && !options.fixed_iterations) {
-            break;
+    double det=r[0]*(r[4]*r[8]-r[5]*r[7])-r[1]*(r[3]*r[8]-r[5]*r[6])+r[2]*(r[3]*r[7]-r[4]*r[6]);
+    if (std::abs(det-1) > 1e-3) return result->status;
+    HostWorkspace host{}; DeviceWorkspace device{};
+    bool gpu = o->backend != BACKEND_CPU;
+    Pose current = o->initial_pose;
+    IcpStatus s = gpu ? preallocDeviceWorkspace(&device, source->count, target->count)
+                      : preallocHostWorkspace(&host, source->count);
+    if (s == ICP_OK && gpu) s = uploadPointClouds(&device, source->points_h, target->points_h);
+    const float cutoff = float(o->max_distance * o->max_distance);
+    for (int iteration = 0; s == ICP_OK && iteration < o->max_iterations; ++iteration) {
+        IcpStatistics stats{};
+        Pose delta{}, next{};
+        bool converged = false;
+        if (gpu) {
+            s = uploadPose(&device, &current);
+            if (s == ICP_OK) s = transformPointsCUDA(&device);
+            if (s == ICP_OK) s = findCorrespondencesCUDA(&device, o->backend, cutoff);
+            if (s == ICP_OK) s = computeStatisticsCUDA(&device);
+            if (s == ICP_OK) s = downloadStatistics(&device, &stats);
+        } else {
+            s = transformPointsCPU(source->points_h, host.transformed_h, source->count, &current);
+            if (s == ICP_OK) s = findCorrespondencesCPU(host.transformed_h, target->points_h,
+                source->count, target->count, cutoff, host.match_index_h, host.match_dist2_h);
+            if (s == ICP_OK) s = computeStatisticsCPU(host.transformed_h, target->points_h,
+                host.match_index_h, host.match_dist2_h, source->count, target->count, &stats);
         }
+        if (s != ICP_OK) break;
+        if (stats.count < 3) { s = ICP_INSUFFICIENT_MATCHES; break; }
+        s = solveRigidUpdateCPU(&stats, &delta);
+        if (s == ICP_OK) s = composePoseCPU(&delta, &current, &next);
+        if (s == ICP_OK) s = checkConvergenceCPU(&delta, o, &converged);
+        if (s != ICP_OK) break;
+        current = next;
+        ++result->iterations_completed;
+        if (converged && !o->fixed_iterations) break;
     }
-    result.loop_wall_ms = now_ms() - loop_start;
-
-    const double eval_start = now_ms();
-    // Recompute correspondences at the final pose before calculating RMSE.
-    Step final_step = backend->evaluate(result.pose);
-    result.final_inliers = int(final_step.stats.v[0]);
-    if (result.final_inliers < 3) {
-        throw std::runtime_error("Fewer than 3 final inliers");
+    if (s == ICP_OK) {
+        // TODO[VALIDATION]: Re-transform ORIGINAL source at current final pose,
+        // redo correspondence/statistics, then publish pose/count/RMSE/convergence.
+        // Never publish stale pre-update SSE or mark the initial pose as an estimate.
+        s = ICP_NOT_IMPLEMENTED;
     }
-    result.final_rmse = std::sqrt(final_step.stats.v[16] / final_step.stats.v[0]);
-    result.final_eval_ms = now_ms() - eval_start;
-    result.registration_wall_ms = now_ms() - total_start;
-    return result;
-}
+    deallocHostWorkspace(&host);
+    deallocDeviceWorkspace(&device);
+    result->status = s;
+    return s;
 }
