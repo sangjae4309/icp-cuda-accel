@@ -43,6 +43,26 @@ static bool nearPoint(Point a, Point b) {
         && std::fabs(double(a.y)-double(b.y))<=tol[1]
         && std::fabs(double(a.z)-double(b.z))<=tol[2];
 }
+// --- NN-1 correspondence fixture: n=6, m=5. N != M and N is not a multiple of 256.
+// Every coordinate and every resulting squared distance is exactly representable in
+// float, so the expected tables below are exact values rather than approximations.
+static const Point kCorrSource[6] = {
+    {0,0,0},     // exact hit on target 0, dist2 == 0
+    {1,0,0},     // exact TIE: target 0 and target 1 are both at dist2 == 1
+    {0.5f,0,0},  // nearest is target 0 at 0.25 (many-to-one with the two above)
+    {2.5f,0,0},  // nearest is target 1 at 0.25
+    {0,10,0},    // exact hit on target 3, dist2 == 0
+    {32,0,0},    // nearest is target 2 at 484, outside every cutoff tested
+};
+static const Point kCorrTarget[5] = {{0,0,0},{2,0,0},{10,0,0},{0,10,0},{64,0,0}};
+// The nearest squared distance is reported regardless of the cutoff, so one table serves
+// all three cases. Only the index column changes as the cutoff tightens.
+static const float kCorrD2[6] = {0, 1, 0.25f, 0.25f, 0, 484};
+static const int kCorrIdxCut1[6]   = { 0,  0,  0,  1, 3, -1}; // cutoff 1.00: tie point sits
+                                                              // exactly ON the cutoff, kept
+static const int kCorrIdxCut025[6] = { 0, -1,  0,  1, 3, -1}; // cutoff 0.25: 0.25 == cutoff
+                                                              // kept, dist2 1 now rejected
+static const int kCorrIdxCut0[6]   = { 0, -1, -1, -1, 3, -1}; // cutoff 0: only exact hits
 int main(int argc, char** argv) {
     const bool gpu=argc==2 && !std::strcmp(argv[1],"--gpu");
     Point source[257]{}, target[3]{{1,2,3},{4,5,6},{7,8,9}};
@@ -129,7 +149,85 @@ int main(int argc, char** argv) {
             CHECK(transformPointsCUDA(&bad)==ICP_INVALID_INPUT);
         }
         CHECK(uploadPose(&w,&o.initial_pose)==ICP_OK); // restore identity for later checks
-        CHECK(findCorrespondencesCUDA(&w,BACKEND_CUDA_TILED,1)==ICP_NOT_IMPLEMENTED);
+        // --- NN-1 correspondence: own 6x5 workspace, driven through the real per-iteration
+        // order (upload pose -> transform -> correspondence) rather than poking device memory.
+        {
+            DeviceWorkspace c{};
+            CHECK(preallocDeviceWorkspace(&c,6,5)==ICP_OK);
+            CHECK(c.num_blocks==1 && c.num_source==6 && c.num_target==5);
+            CHECK(uploadPointClouds(&c,kCorrSource,kCorrTarget)==ICP_OK);
+            CHECK(uploadPose(&c,&o.initial_pose)==ICP_OK); // identity: transformed == source
+            CHECK(transformPointsCUDA(&c)==ICP_OK);
+            // Backend dispatch: tiled is still NN-2, CPU and out-of-range are rejected.
+            CHECK(findCorrespondencesCUDA(&c,BACKEND_CUDA_TILED,1)==ICP_NOT_IMPLEMENTED);
+            CHECK(findCorrespondencesCUDA(&c,BACKEND_CPU,1)==ICP_INVALID_INPUT);
+            CHECK(findCorrespondencesCUDA(&c,static_cast<IcpBackend>(99),1)==ICP_INVALID_INPUT);
+            CHECK(findCorrespondencesCUDA(nullptr,BACKEND_CUDA_NAIVE,1)==ICP_INVALID_INPUT);
+            DeviceWorkspace unalloc{};
+            CHECK(findCorrespondencesCUDA(&unalloc,BACKEND_CUDA_NAIVE,1)==ICP_INVALID_INPUT);
+            CHECK(findCorrespondencesCUDA(&c,BACKEND_CUDA_NAIVE,-1)==ICP_INVALID_INPUT);
+            const float cutoff[3]={1.0f,0.25f,0.0f};
+            const int* want[3]={kCorrIdxCut1,kCorrIdxCut025,kCorrIdxCut0};
+            for(int k=0;k<3;++k) {
+                CHECK(findCorrespondencesCUDA(&c,BACKEND_CUDA_NAIVE,cutoff[k])==ICP_OK);
+                CHECK(cudaDeviceSynchronize()==cudaSuccess);
+                int gidx[6]; float gd2[6];
+                CHECK(cudaMemcpy(gidx,c.match_index_d,sizeof(gidx),cudaMemcpyDeviceToHost)==cudaSuccess);
+                CHECK(cudaMemcpy(gd2,c.match_dist2_d,sizeof(gd2),cudaMemcpyDeviceToHost)==cudaSuccess);
+                int cidx[6]; float cd2[6];
+                CHECK(findCorrespondencesCPU(kCorrSource,kCorrTarget,6,5,cutoff[k],cidx,cd2)==ICP_OK);
+                CHECK(!std::memcmp(gidx,cidx,sizeof(gidx))); // bit-exact index parity
+                CHECK(!std::memcmp(gd2,cd2,sizeof(gd2)));    // bit-exact dist2 parity
+                for(int i=0;i<6;++i) { CHECK(gidx[i]==want[k][i]); CHECK(gd2[i]==kCorrD2[i]); }
+            }
+            // Idle-lane guard for the correspondence kernel, same technique as the transform
+            // one: n=6 with BLOCK_SIZE lanes means 250 lanes have i>=n and must write nothing.
+            {
+                int* padIdx=nullptr; float* padD2=nullptr;
+                CHECK(cudaMalloc(reinterpret_cast<void**>(&padIdx),BLOCK_SIZE*sizeof(int))==cudaSuccess);
+                CHECK(cudaMalloc(reinterpret_cast<void**>(&padD2),BLOCK_SIZE*sizeof(float))==cudaSuccess);
+                int sIdx[BLOCK_SIZE]; float sD2[BLOCK_SIZE];
+                for(int i=0;i<BLOCK_SIZE;++i) { sIdx[i]=-9999; sD2[i]=-7.5f; }
+                CHECK(cudaMemcpy(padIdx,sIdx,sizeof(sIdx),cudaMemcpyHostToDevice)==cudaSuccess);
+                CHECK(cudaMemcpy(padD2,sD2,sizeof(sD2),cudaMemcpyHostToDevice)==cudaSuccess);
+                DeviceWorkspace probe=c; // borrows transformed_d/target_d; not a real owner
+                probe.match_index_d=padIdx; probe.match_dist2_d=padD2;
+                CHECK(findCorrespondencesCUDA(&probe,BACKEND_CUDA_NAIVE,1.0f)==ICP_OK);
+                CHECK(cudaDeviceSynchronize()==cudaSuccess);
+                int rIdx[BLOCK_SIZE]; float rD2[BLOCK_SIZE];
+                CHECK(cudaMemcpy(rIdx,padIdx,sizeof(rIdx),cudaMemcpyDeviceToHost)==cudaSuccess);
+                CHECK(cudaMemcpy(rD2,padD2,sizeof(rD2),cudaMemcpyDeviceToHost)==cudaSuccess);
+                for(int i=0;i<6;++i) { CHECK(rIdx[i]==kCorrIdxCut1[i]); CHECK(rD2[i]==kCorrD2[i]); }
+                for(int i=6;i<BLOCK_SIZE;++i) { CHECK(rIdx[i]==-9999); CHECK(rD2[i]==-7.5f); }
+                CHECK(cudaFree(padIdx)==cudaSuccess); CHECK(cudaFree(padD2)==cudaSuccess);
+            }
+            deallocDeviceWorkspace(&c);
+        }
+        // --- NN-1 parity across more than one block: n=257 (partial final block), m=3. ---
+        {
+            CHECK(transformPointsCUDA(&w)==ICP_OK); // identity pose restored just above
+            CHECK(findCorrespondencesCUDA(&w,BACKEND_CUDA_NAIVE,1000.0f)==ICP_OK);
+            CHECK(cudaDeviceSynchronize()==cudaSuccess);
+            int gidx[257]; float gd2[257];
+            CHECK(cudaMemcpy(gidx,w.match_index_d,sizeof(gidx),cudaMemcpyDeviceToHost)==cudaSuccess);
+            CHECK(cudaMemcpy(gd2,w.match_dist2_d,sizeof(gd2),cudaMemcpyDeviceToHost)==cudaSuccess);
+            Point tgold[257]{}; int cidx[257]; float cd2[257];
+            CHECK(transformPointsCPU(source,tgold,257,&o.initial_pose)==ICP_OK);
+            CHECK(findCorrespondencesCPU(tgold,target,257,3,1000.0f,cidx,cd2)==ICP_OK);
+            CHECK(!std::memcmp(gidx,cidx,sizeof(gidx)));
+            CHECK(!std::memcmp(gd2,cd2,sizeof(gd2)));
+            // Guard against a degenerate case: the cutoff is chosen so that this fixture
+            // keeps some pairs, rejects some, selects every target and reuses at least one.
+            int kept=0, reused=0; bool seen[3]={false,false,false};
+            for(int i=0;i<257;++i) if(cidx[i]>=0) {
+                CHECK(cidx[i]<3);
+                ++kept;
+                if(seen[cidx[i]]) ++reused; else seen[cidx[i]]=true;
+            }
+            CHECK(kept>0 && kept<257);
+            CHECK(seen[0] && seen[1] && seen[2]); // the scan is not stuck on one target
+            CHECK(reused>0);                      // many-to-one genuinely occurs
+        }
         CHECK(computeStatisticsCUDA(&w)==ICP_NOT_IMPLEMENTED);
         deallocDeviceWorkspace(&w); deallocDeviceWorkspace(&w);
         CHECK(!w.source_d && !w.stats_d && w.num_blocks==0);
@@ -139,7 +237,7 @@ int main(int argc, char** argv) {
             CHECK(!result.pose_valid && result.iterations_completed==0);
         }
         CHECK(cudaDeviceSynchronize()==cudaSuccess);
-        std::puts("PASS: CUDA memory movement, transform parity, TODO propagation"); return 0;
+        std::puts("PASS: CUDA memory, transform + correspondence parity, TODO propagation"); return 0;
 #else
         return 77;
 #endif
@@ -191,6 +289,29 @@ int main(int argc, char** argv) {
         }
         CHECK(!std::memcmp(original,source,sizeof(source)));
     }
+    // --- NN-1 correspondence, host gold ---
+    {
+        int idx[6]; float d2[6];
+        CHECK(findCorrespondencesCPU(nullptr,kCorrTarget,6,5,1,idx,d2)==ICP_INVALID_INPUT);
+        CHECK(findCorrespondencesCPU(kCorrSource,nullptr,6,5,1,idx,d2)==ICP_INVALID_INPUT);
+        CHECK(findCorrespondencesCPU(kCorrSource,kCorrTarget,6,5,1,nullptr,d2)==ICP_INVALID_INPUT);
+        CHECK(findCorrespondencesCPU(kCorrSource,kCorrTarget,6,5,1,idx,nullptr)==ICP_INVALID_INPUT);
+        CHECK(findCorrespondencesCPU(kCorrSource,kCorrTarget,0,5,1,idx,d2)==ICP_INVALID_INPUT);
+        CHECK(findCorrespondencesCPU(kCorrSource,kCorrTarget,6,0,1,idx,d2)==ICP_INVALID_INPUT);
+        CHECK(findCorrespondencesCPU(kCorrSource,kCorrTarget,6,5,-1,idx,d2)==ICP_INVALID_INPUT);
+        CHECK(findCorrespondencesCPU(kCorrSource,kCorrTarget,6,5,
+            std::numeric_limits<float>::quiet_NaN(),idx,d2)==ICP_INVALID_INPUT);
+        // Tie-breaking, many-to-one, the exact cutoff boundary and rejection-with-distance.
+        const float cutoff[3]={1.0f,0.25f,0.0f};
+        const int* want[3]={kCorrIdxCut1,kCorrIdxCut025,kCorrIdxCut0};
+        for(int k=0;k<3;++k) {
+            CHECK(findCorrespondencesCPU(kCorrSource,kCorrTarget,6,5,cutoff[k],idx,d2)==ICP_OK);
+            for(int i=0;i<6;++i) {
+                CHECK(idx[i]==want[k][i]);
+                CHECK(d2[i]==kCorrD2[i]); // exact: these distances are representable
+            }
+        }
+    }
     CHECK(runICP(&a,&b,&o,&result)==ICP_NOT_IMPLEMENTED);
     CHECK(result.status==ICP_NOT_IMPLEMENTED && !result.pose_valid && !result.converged);
     CHECK(result.iterations_completed==0 && std::isnan(result.final_rmse));
@@ -218,6 +339,6 @@ int main(int argc, char** argv) {
         else { CHECK(s==ICP_INVALID_INPUT && !c.points_h && c.count==0); }
         freePointCloud(&c); freePointCloud(&c);
     }
-    std::puts("PASS: host infrastructure, transform gold, TODO propagation");
+    std::puts("PASS: host infrastructure, transform + correspondence gold, TODO propagation");
     return 0;
 }
