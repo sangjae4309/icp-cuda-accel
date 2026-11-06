@@ -6,6 +6,16 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 add_library(icp_core io.cpp icp_gold.cpp icp_solver.cpp icp_run.cpp)
 target_include_directories(icp_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_options(icp_core PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall;-Wextra;-Wpedantic>)
+# CPU/GPU parity: both compilers fuse multiply-add by default, which changes results by a
+# ULP of the accumulation type. The transform accumulates in double and rounds once to
+# float, so contraction is invisible there (verified both ways). It is NOT invisible where
+# the accumulation type is the output type: correspondence (NN-1) computes dist2 in float
+# and must match bit-for-bit, ties included. Pin contraction off for both languages so that
+# parity is a property of the build rather than of how much slack the rounding happens to
+# leave. Drop these two lines only together with the bit-exact assertions in the tests.
+target_compile_options(icp_core PRIVATE
+  $<$<COMPILE_LANGUAGE:CXX>:-ffp-contract=off>
+  $<$<COMPILE_LANGUAGE:CUDA>:-fmad=false>)
 if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
   message(FATAL_ERROR "Pass -DCMAKE_CUDA_ARCHITECTURES=<actual GPU architecture>")
 endif()
