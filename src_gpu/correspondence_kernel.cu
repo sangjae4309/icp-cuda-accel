@@ -44,11 +44,48 @@ __global__ void findCorrespondencesNaiveKernel(const Point* x, const Point* q, i
 }
 __global__ void findCorrespondencesTiledKernel(const Point* x, const Point* q, int n, int m,
     float cutoff, int* index, float* dist2) {
-    // TODO[CORRESPONDENCE]: Same device inputs/outputs and tie rule as naive/CPU.
-    // Load shared-memory target tiles; handle partial final tile and source bounds.
+    // Same device inputs/outputs and tie rule as naive/CPU.
+    // Loads shared-memory target tiles; handles the partial final tile and source bounds.
     // EVERY lane, including i>=n, reaches BOTH barriers in every tile iteration.
-    // Guard calculations and writes, never return early before synchronization.
-    (void)x; (void)q; (void)n; (void)m; (void)cutoff; (void)index; (void)dist2;
+    // Calculations and writes are guarded; there is no early return.
+    __shared__ Point tile[BLOCK_SIZE];
+    const int lane = threadIdx.x;
+    const int i = blockIdx.x * blockDim.x + lane;
+
+    // Deliberately NOT `if (i >= n) return;`. A lane whose source index is out of range
+    // still has to load its slot of every tile and still has to reach both barriers, so
+    // out-of-range lanes are handled by guarding work rather than by leaving the kernel.
+    const bool active = i < n;
+    Point p = {0, 0, 0};
+    if (active) p = x[i];
+
+    float best = FLT_MAX;
+    int best_j = -1;
+
+    for (int base = 0; base < m; base += BLOCK_SIZE) {
+        // Cooperative load indexed by LANE, never by i: the tile slot a lane fills has
+        // nothing to do with whether that lane has a source point of its own.
+        if (base + lane < m) tile[lane] = q[base + lane];
+        __syncthreads(); // every slot of the tile is populated before anyone reads it
+
+        // Partial final tile: only the first (m - base) slots were refilled this pass.
+        const int count = (m - base < BLOCK_SIZE) ? (m - base) : BLOCK_SIZE;
+        if (active) {
+            // base+j walks the global target indices in the same ascending order as j does
+            // in the naive kernel, so the strict < keeps the smallest GLOBAL index on an
+            // exact tie, including a tie whose two targets fall in different tiles.
+            for (int j = 0; j < count; ++j) {
+                const float d = squaredDistance(p, tile[j]);
+                if (d < best) { best = d; best_j = base + j; }
+            }
+        }
+        __syncthreads(); // no lane may refill the tile while another warp still reads it
+    }
+
+    if (active) {
+        dist2[i] = best;
+        index[i] = (best <= cutoff) ? best_j : -1;
+    }
 }
 IcpStatus findCorrespondencesCUDA(DeviceWorkspace* w, IcpBackend b, float cutoff) {
     // Device transformed/target -> match arrays. Selects the naive or tiled launch from
@@ -66,7 +103,12 @@ IcpStatus findCorrespondencesCUDA(DeviceWorkspace* w, IcpBackend b, float cutoff
             cutoff, w->match_index_d, w->match_dist2_d);
         return checked(cudaGetLastError(), "findCorrespondencesNaiveKernel launch");
     case BACKEND_CUDA_TILED:
-        return ICP_NOT_IMPLEMENTED; // NN-2
+        // Same grid as the naive launch. The kernel's tile load assumes the block is
+        // exactly BLOCK_SIZE lanes wide, which is what the shared tile is sized for.
+        findCorrespondencesTiledKernel<<<w->num_blocks, BLOCK_SIZE>>>(
+            w->transformed_d, w->target_d, w->num_source, w->num_target,
+            cutoff, w->match_index_d, w->match_dist2_d);
+        return checked(cudaGetLastError(), "findCorrespondencesTiledKernel launch");
     default:
         return ICP_INVALID_INPUT; // includes BACKEND_CPU
     }
