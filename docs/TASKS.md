@@ -8,9 +8,9 @@ completion does not imply ICP correctness. See DRAFT_VALIDATION.md for evidence.
 | INF-1 | P0 | Infrastructure | io.cpp, icp.h, main.cpp | XYZ / options | Validated host clouds | Integration / Infrastructure | TBD | None | Load/reject inputs, explicit ownership, no result claims | Implemented |
 | INF-2 | P0 | Memory | icp_gold.cpp, cuda_memory.cu | N, M / host clouds | Workspaces / device copies | Integration / Infrastructure | TBD | INF-1 | Allocation/free and round-trip tests pass | Implemented |
 | FLOW-1 | P0 | Integration | icp_run.cpp | Clouds/options | Status/result | Integration / Infrastructure | TBD | INF-2 | Stage order, cleanup and TODO propagation | Draft implemented |
-| TR-1 | P0 | Transform | transformPointsCPU/CUDA | Original source / current pose | Transformed source | Transform | TBD | INF-2 | CPU/GPU agree without source mutation | TODO |
-| NN-1 | P0 | Correspondence | findCorrespondencesCPU, naive kernel | Transformed source / target / cutoff | Indices / squared distances | Correspondence | TBD | TR-1 | Brute-force parity, tie/threshold/many-to-one tests | TODO |
-| NN-2 | P1 | Correspondence | tiled kernel | Same as NN-1 | Same as NN-1 | Correspondence | TBD | NN-1 | Partial tiles, all lanes reach both barriers, parity | TODO |
+| TR-1 | P0 | Transform | transformPointsCPU/CUDA | Original source / current pose | Transformed source | Transform | TBD | INF-2 | CPU/GPU agree without source mutation | Implemented |
+| NN-1 | P0 | Correspondence | findCorrespondencesCPU, naive kernel | Transformed source / target / cutoff | Indices / squared distances | Correspondence | TBD | TR-1 | Brute-force parity, tie/threshold/many-to-one tests | Implemented |
+| NN-2 | P1 | Correspondence | tiled kernel | Same as NN-1 | Same as NN-1 | Correspondence | TBD | NN-1 | Partial tiles, all lanes reach both barriers, parity | Implemented |
 | ST-1 | P0 | Statistics | computeStatisticsCPU/CUDA, statistics_kernel.cu | Valid matched pairs | Count, centroids, SSE, H | Statistics / Reduction | TBD | NN-1 | Two-pass double reductions, duplicate targets counted | TODO |
 | SO-1 | P0 | Solver | solveRigidUpdateCPU | Centroids / H | Incremental delta | Solver / Pose Update | TBD | ST-1 | SVD choice, reflection, finite and degeneracy checks | TODO |
 | SO-2 | P0 | Pose | composePoseCPU, checkConvergenceCPU | Delta / current / tolerances | Next / convergence | Solver / Pose Update | TBD | SO-1 | Left composition and documented tolerance semantics | TODO |
