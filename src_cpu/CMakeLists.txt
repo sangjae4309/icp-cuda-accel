@@ -6,6 +6,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 add_library(icp_core io.cpp icp_gold.cpp icp_solver.cpp icp_run.cpp)
 target_include_directories(icp_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_options(icp_core PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall;-Wextra;-Wpedantic>)
+# Must match src_gpu: the host gold has to produce bit-identical results in both projects,
+# and the CUDA side pins -fmad=false for the same reason. See src_gpu/CMakeLists.txt.
+target_compile_options(icp_core PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-ffp-contract=off>)
 target_sources(icp_core PRIVATE cuda_unavailable.cpp)
 add_executable(icp_run main.cpp)
 target_link_libraries(icp_run PRIVATE icp_core)
