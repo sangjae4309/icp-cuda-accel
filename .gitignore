@@ -28,19 +28,30 @@ __pycache__/
 *~
 *.swp
 
-# Keep only the bundled KITTI sample in Git
+# Keep dataset binaries local; retain format documentation
 /data/*
-!/data/kitti-sample/
+!/data/README.md
 /kitti/
 
 # Generated measurements and machine-specific Slurm jobs
 /results/
+/result/
+/scripts/result/
 /slurm-*.out
 
 # Local agent instructions and tooling
+/.agent/
 AGENTS.md
 AGENTS.local.md
 CLAUDE.md
 /.claude/
 /.cursor/
 /CMakeUserPresets.json
+
+# codex-env machine-local settings and drafts
+.agent/upstream.local.json
+.agent/staging/
+.agent/.lock/
+.agent/drafts/
+.agent/block-plan.json
+.agent/migration-plan.json

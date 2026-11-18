@@ -29,3 +29,14 @@ Evaluation of correspondences and residuals at the final accumulated pose.
 
 **Dry run**:
 An infrastructure check that produces no registration estimate.
+
+
+## Iteration recording terms
+
+- **Iteration snapshot**: Coordinates of a fixed selection of original source
+  points transformed by the pose after one completed ICP update.
+- **Dump window**: A spatial region used to select points for inspection; it
+  does not restrict the point cloud used for registration.
+- **Correspondence search method**: The strategy used to find nearest target
+  points within a fixed execution target. Brute-force and tiled CUDA search
+  differ in data access, not the intended nearest-neighbor objective.
