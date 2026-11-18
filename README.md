@@ -10,14 +10,16 @@ reference for evaluating CUDA correctness and performance.
 
 KITTI sequence 00, frame 1 → 0, 124,605 source points and 124,668 target points.
 20 iterations. CPU: AMD EPYC 9534. GPU: NVIDIA L40S.
+Timing covers the complete Step 1–5 loop only; setup, logging and final
+evaluation are excluded on both targets. One run per method.
 
 <!-- execution-time-results:start -->
 
 | Method | Execution time (ms) | Translation error | Rotation error | Inliers |
 | --- | ---: | ---: | ---: | ---: |
-| CPU serial | 315,393.125 | 24.08 cm | 0.12556° | 123,329 |
-| CUDA brute-force | 442.488 | 24.08 cm | 0.12556° | 123,329 |
-| CUDA tiled brute-force | 312.209 | 24.08 cm | 0.12556° | 123,329 |
+| CPU serial | 300,596.867 | 24.08 cm | 0.12556° | 123,329 |
+| CUDA brute-force | 253.918 | 24.08 cm | 0.12556° | 123,329 |
+| CUDA tiled brute-force | 129.478 | 24.08 cm | 0.12556° | 123,329 |
 | CUDA KDtree | TBD | TBD | TBD | TBD |
 | CUDA voxel-grid | TBD | TBD | TBD | TBD |
 
@@ -75,12 +77,14 @@ CPU vanilla is capped at 20 iterations; CPU feature and CUDA retain 100.
 For a matched vanilla comparison, override the iteration cap for either executable:
 
 ```sh
-ICP_ITERATIONS=20 make cpu RUN=1
-ICP_ITERATIONS=20 make gpu SEARCH=all RUN=1
+ICP_BENCHMARK=1 ICP_ITERATIONS=20 make cpu RUN=1
+ICP_BENCHMARK=1 ICP_ITERATIONS=20 make gpu SEARCH=all RUN=1
 ```
 
-This retains the usual early stopping and changes only the maximum iteration
-count. The CPU feature method retains its separate options.
+Benchmark mode forces exactly 20 iterations and disables iteration logging,
+point dumps and per-iteration timers. A single host monotonic-clock interval
+covers the entire loop, including CUDA host SVD and pose update. Ordinary runs
+retain early stopping and iteration logging. CPU feature has separate options.
 
 Release CPU/CUDA builds and a matched 20-iteration comparison passed execution
 on an NVIDIA L40S. See [CPU/CUDA accuracy and latency](docs/CPU_CUDA_COMPARISON.md).
@@ -130,9 +134,10 @@ Each CSV row also records the updated pose and convergence flag.
   steps 1–3 and statistics download. Host SVD and pose update are excluded.
   It is a CUDA-event interval, not a sum of kernel-only durations; stream idle
   time between host submissions may also contribute.
-- Setup, final error evaluation and log/point-file writes are outside per-iteration
-  timing. `execution_time_ms` still measures the entire registration call,
-  including logging/dumping overhead, so these are different timing scopes.
+- In ordinary runs, setup, final evaluation and writes are outside per-iteration
+  timing but inside complete-call time. Benchmark mode disables all per-iteration
+  recording and times the whole loop once, including host Step 4–5 for CUDA.
+  Initial allocation/upload, final evaluation and cleanup are outside that loop.
 - Filesystem errors are reported as `ICP_IO_ERROR`; timing rows describe
   completed updates, not partially failed iterations.
 

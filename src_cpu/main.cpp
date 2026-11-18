@@ -21,6 +21,9 @@ int main(int argc, char** argv)
 
     IcpOptions options{};
     defaultOptions(&options);
+    const char* benchmark = std::getenv("ICP_BENCHMARK");
+    options.benchmark = benchmark && std::strcmp(benchmark, "1") == 0;
+    options.fixed_iterations = options.benchmark;
     const char* iterations = std::getenv("ICP_ITERATIONS");
     if (iterations) {
         options.max_iterations = std::atoi(iterations);
@@ -30,7 +33,8 @@ int main(int argc, char** argv)
         }
     }
     const char* dump = std::getenv("ICP_DUMP");
-    options.dump_iterations = dump && std::strcmp(dump, "1") == 0;
+    options.dump_iterations =
+        !options.benchmark && dump && std::strcmp(dump, "1") == 0;
 
     PointCloud source{}, target{};
     IcpStatus status = load_kitti(argv[1], &source);
@@ -41,8 +45,10 @@ int main(int argc, char** argv)
     if (std::strcmp(method, "vanilla") && std::strcmp(method, "feature"))
         status = ICP_INVALID_INPUT;
 
-    if (options.dump_iterations && !std::strcmp(method, "feature")) {
-        std::fprintf(stderr, "Point dumps are supported for vanilla only.\n");
+    if ((options.dump_iterations || options.benchmark) &&
+        !std::strcmp(method, "feature")) {
+        std::fprintf(stderr,
+            "Benchmark and point dumps are supported for vanilla only.\n");
         status = ICP_INVALID_INPUT;
     }
 
@@ -73,9 +79,13 @@ int main(int argc, char** argv)
 
     std::printf("%s\n", statusName(status));
     if (status == ICP_OK) {
-        const double execution_time_ms =
-            (double(end.tv_sec) - double(start.tv_sec)) * 1000.0 +
-            (double(end.tv_nsec) - double(start.tv_nsec)) / 1e6;
+        const double execution_time_ms = options.benchmark
+            ? result.loop_time_ms
+            : (double(end.tv_sec) - double(start.tv_sec)) * 1000.0 +
+                (double(end.tv_nsec) - double(start.tv_nsec)) / 1e6;
+        std::printf("timing_scope=%s\n",
+            options.benchmark ? "whole_loop_steps_1_to_5_no_logging"
+                              : "complete_registration_call");
         std::printf("execution_time_ms=%.3f\n", execution_time_ms);
         std::printf("iterations=%d converged=%d inliers=%d rmse=%.12g\n",
             result.iterations_completed, int(result.converged),

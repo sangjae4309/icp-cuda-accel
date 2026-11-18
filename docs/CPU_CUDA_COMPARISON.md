@@ -1,4 +1,78 @@
-# Full-cloud CPU and CUDA comparison
+# CPU and CUDA: whole 20-iteration loop timing
+
+Remeasured on 2026-11-17 at the user's request under allocation 7514083 on
+agd06: AMD EPYC 9534 CPU and NVIDIA L40S (SM89). The earlier complete-call
+442.488 ms naive result included initialization and logging; it is not the
+execution metric used in the current README. That historical measurement is
+retained below rather than relabeled as computation-only time.
+
+## Identical measurement conditions
+
+- Original KITTI sequence 00 frame 1 -> 0; 124605 source / 124668 target points.
+- Identity pose, 1 m cutoff, 1e-6 translation/rotation thresholds, same precision.
+- Exactly 20 updates, early stopping disabled, one execution per method.
+- Same node/allocation, Release builds, GCC 8.5.0, CUDA 12.1.105, contraction off.
+- Serial CPU baseline; four allocated CPU cores do not make it multithreaded.
+- Sequential CPU, CUDA naive, CUDA tiled, no competing benchmark processes.
+- No special warm-up, fixed-clock/affinity campaign or repeat aggregation.
+
+A single `CLOCK_MONOTONIC` interval begins immediately before the iteration loop
+and ends immediately after it, identically on CPU and CUDA. This is not a sum of
+per-iteration times and is not a CUDA-event-only metric. CUDA Step 4 (host SVD)
+and Step 5 (host pose update/convergence) are included, along with loop control
+and the per-update pose upload/statistics download needed by the algorithm.
+Each statistics download is synchronous; GPU work completes before host Step 4,
+so there is no unfinished device work when the loop stop timestamp is taken.
+
+Excluded on both targets: file loading, allocation, initial original-cloud upload,
+initialization, all logging/CSV writes/coordinate dumps, per-iteration timers and
+CUDA events, final error evaluation and memory cleanup. Final errors are still
+evaluated after timing. Empty iteration CSV headers and initial/final output are
+written outside the timed interval; no iteration rows or output calls execute
+inside benchmark mode. These results use the same timing boundary and run count,
+but naturally compare different CPU/GPU hardware and algorithms' access paths.
+
+## Current results
+
+| Method | Whole loop (ms) | Translation error | Rotation error | Inliers |
+| --- | ---: | ---: | ---: | ---: |
+| CPU serial | 300,596.867 | 24.08 cm | 0.12556° | 123,329 |
+| CUDA brute-force | 253.918 | 24.08 cm | 0.12556° | 123,329 |
+| CUDA tiled brute-force | 129.478 | 24.08 cm | 0.12556° | 123,329 |
+
+All return ICP_OK and complete 20 updates, with `converged=0`. Final printed pose,
+RMSE (0.142262415058 m) and counts match across targets. Output-level parity does
+not prove bitwise parity of intermediate arrays. GT translation and rotation
+errors remain 0.240848923628 m / 0.125556895097 degrees. No GT initialization or
+tuning was used. The observed loop-time ratios relative to this serial baseline
+are about 1184 (naive) and 2322 (tiled); tiled is about 1.96 times faster than naive
+for this loop. These are this workload's measured ratios, not a general speedup
+claim or a statistically characterized benchmark distribution.
+
+## Commands and evidence
+
+```sh
+ICP_BENCHMARK=1 ICP_ITERATIONS=20 make cpu RUN=1
+ICP_BENCHMARK=1 ICP_ITERATIONS=20 make gpu SEARCH=all RUN=1
+```
+
+`ICP_BENCHMARK=1` forces fixed iterations, skips all per-iteration diagnostic
+output/timers, disables CPU point dumps and selects `result.loop_time_ms` for
+`execution_time_ms`. `timing_scope=whole_loop_steps_1_to_5_no_logging` confirms
+that boundary in the output. Normal diagnostic mode retains its earlier
+complete-registration-call metric and iteration logs; do not mix those times
+with benchmark results.
+
+Exact commands, build logs, three runtime logs, GT comparison and hashes are in
+`scripts/result/cpu-gpu-loop20-comparison/`. The analysis script verifies 20
+updates, the scope marker, no iteration output, no iteration data rows and frozen
+source identities. Public `scripts/result.csv` and the README plot use these new
+values. No sanitizer, per-stage-array verification, point-dump execution, other
+frame pair or frequency-controlled comparison was performed.
+
+---
+
+# Historical complete-call CPU and CUDA comparison
 
 Observed 2026-11-17 in the user's existing interactive-gpu allocation 7514083,
 node agd06. The allocation was reused; the local shell scripts themselves do not

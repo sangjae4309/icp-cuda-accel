@@ -45,6 +45,7 @@ typedef struct
     int max_iterations;
     double max_distance, translation_tolerance, rotation_tolerance;
     bool fixed_iterations;
+    bool benchmark;
     Pose initial_pose;
 } IcpOptions;
 
@@ -55,6 +56,7 @@ typedef struct
     bool pose_valid, converged;
     int iterations_completed, final_inliers;
     double final_rmse;
+    double loop_time_ms;
 } IcpResult;
 
 void identityPose(Pose* pose);

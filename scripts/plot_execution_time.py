@@ -29,15 +29,15 @@ ax.set_yticks(y)
 ax.set_yticklabels(labels, fontsize=12)
 ax.invert_yaxis()
 ax.set_xscale('log')
-ax.set_xlim(100, max(times) * 4)
-ax.set_xlabel('Complete ICP execution time (ms, logarithmic scale)')
+ax.set_xlim(min(times) / 2, max(times) * 4)
+ax.set_xlabel('20-iteration Step 1–5 time (ms, logarithmic scale)')
 ax.set_title('Vanilla ICP · 20 iterations · full KITTI frame pair', pad=16)
 ax.grid(axis='x', which='major', alpha=.2)
 ax.set_axisbelow(True)
 for spine in ['top', 'right', 'left']:
     ax.spines[spine].set_visible(False)
 ax.tick_params(axis='y', length=0)
-# Arrow endpoints are measured CPU/GPU times on the logarithmic axis.
+# Arrow endpoints use the same complete-loop timing boundary on both targets.
 for index in range(1, len(measured)):
     arrow_y = index + .34
     ratio = times[0] / times[index]

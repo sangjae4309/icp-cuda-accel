@@ -30,4 +30,4 @@ the later KD-tree and voxel-grid additions are unimplemented placeholders.
 
 - [CPU accuracy review and saved-pose images](ICP_ACCURACY_REVIEW.md).
 
-- [Full-cloud CPU/CUDA accuracy and latency](CPU_CUDA_COMPARISON.md).
+- [CPU/CUDA whole-loop accuracy and latency](CPU_CUDA_COMPARISON.md).

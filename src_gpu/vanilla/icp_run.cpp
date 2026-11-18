@@ -2,6 +2,7 @@
 #include "icp_utils.h"
 #include "icp_log.h"
 #include <cmath>
+#include <time.h>
 #include <limits>
 
 IcpStatus runICP(const PointCloud* source, const PointCloud* target,
@@ -34,14 +35,17 @@ IcpStatus runICP(const PointCloud* source, const PointCloud* target,
         return s;
     }
 
-    std::puts("iteration_timing=cuda_events_upload_steps_1_to_3_download");
+    std::puts(icp_opt->benchmark ? "iteration_timing=disabled_for_benchmark"
+        : "iteration_timing=cuda_events_upload_steps_1_to_3_download");
 
     GpuIterationTimer timer{};
-    s = createIterationTimer(&timer);
-    if (s != ICP_OK) {
-        closeIterationLog(&log);
-        result->status = s;
-        return s;
+    if (!icp_opt->benchmark) {
+        s = createIterationTimer(&timer);
+        if (s != ICP_OK) {
+            closeIterationLog(&log);
+            result->status = s;
+            return s;
+        }
     }
     s = allocateIcpBuffers(&buffers, source->count, target->count);
     if (s == ICP_OK) {
@@ -49,14 +53,24 @@ IcpStatus runICP(const PointCloud* source, const PointCloud* target,
     }
     bool final_converged = false;
 
-    for (int iteration = 0; s == ICP_OK && iteration < icp_opt->max_iterations;
+    // One wall-clock interval around the complete iteration loop.
+    // Setup/transfers of original clouds are complete before this point.
+    std::fflush(stdout);
+    timespec loop_start, loop_end;
+    clock_gettime(CLOCK_MONOTONIC, &loop_start);
+
+    for (int iteration = 0;
+        s == ICP_OK && iteration < icp_opt->max_iterations &&
+        (!final_converged || icp_opt->fixed_iterations);
         ++iteration) {
         IcpStatistics stats{};
         Pose delta{}, next{};
         bool converged = false;
         float time_ms = 0;
 
-        s = startIterationTimer(&timer);
+        if (!icp_opt->benchmark) {
+            s = startIterationTimer(&timer);
+        }
         if (s == ICP_OK) {
             s = uploadPose(&buffers, &current);
         }
@@ -81,7 +95,7 @@ IcpStatus runICP(const PointCloud* source, const PointCloud* target,
         if (s == ICP_OK) {
             s = downloadStatistics(&buffers, &stats);
         }
-        if (s == ICP_OK) {
+        if (s == ICP_OK && !icp_opt->benchmark) {
             // Same stream as the kernels; the download also completes work.
             // This event interval excludes host SVD and pose composition.
             s = stopIterationTimer(&timer, &time_ms);
@@ -97,24 +111,23 @@ IcpStatus runICP(const PointCloud* source, const PointCloud* target,
         }
 
         // Step 5: host pose composition and convergence.
-        s = updatePoseCPU(&delta, &current, icp_opt, &next, &converged);
-        if (s != ICP_OK) {
-            break;
-        }
+        updatePoseCPU(&delta, &current, icp_opt, &next, &converged);
 
         current = next;
         final_converged = converged;
         ++result->iterations_completed;
-        s = recordIteration(
-            &log, iteration + 1, double(time_ms), &current, converged);
-        if (s != ICP_OK) {
-            break;
-        }
-        if (converged && !icp_opt->fixed_iterations) {
-            break;
+        if (!icp_opt->benchmark) {
+            s = recordIteration(
+                &log, iteration + 1, double(time_ms), &current, converged);
         }
     }
 
+    clock_gettime(CLOCK_MONOTONIC, &loop_end);
+    result->loop_time_ms =
+        (double(loop_end.tv_sec) - double(loop_start.tv_sec)) * 1000.0 +
+        (double(loop_end.tv_nsec) - double(loop_start.tv_nsec)) / 1e6;
+
+    // Final error evaluation is outside the measured iteration loop.
     // Reevaluate steps 1-3 at the final pose for the reported error.
     if (s == ICP_OK) {
         IcpStatistics stats{};
@@ -144,7 +157,9 @@ IcpStatus runICP(const PointCloud* source, const PointCloud* target,
     }
 
     freeIcpBuffers(&buffers);
-    freeIterationTimer(&timer);
+    if (!icp_opt->benchmark) {
+        freeIterationTimer(&timer);
+    }
     const IcpStatus log_status = closeIterationLog(&log);
     if (s == ICP_OK) {
         s = log_status;
