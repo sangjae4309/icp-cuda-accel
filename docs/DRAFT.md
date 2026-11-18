@@ -1,5 +1,9 @@
 # ICP draft code
 
+Historical scaffold documentation; the TODO and CPU CUDA-stub descriptions below
+refer to the original draft, not current source. See README.md and
+[vanilla design](vanilla/README.md) for the current implemented layout.
+
 `../src_cpu/` and `../src_gpu/` contain independent procedural draft code. Previous implementations are retained in Git history at `d46bb9486a361bebdfdb6ab7ad84d9a561bf9b1b`; no reference directory is needed. Each draft directory builds independently.
 
 Implemented: POD data structures, malloc/free host ownership, cudaMalloc/cudaFree

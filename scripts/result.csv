@@ -1,0 +1,4 @@
+method             , execution_time_ms  , min_ms        , max_ms        , runs   , statistic  , iterations
+CPU serial         , 315393.125         , 315393.125    , 315393.125    , 1      , single     , 20
+CUDA brute-force   , 442.488            , 441.354       , 484.793       , 3      , median     , 20
+CUDA tiled         , 312.209            , 311.972       , 335.569       , 3      , median     , 20

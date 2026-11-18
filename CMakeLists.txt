@@ -3,7 +3,6 @@ project(icp LANGUAGES CXX)
 option(ICP_ENABLE_CUDA "Build the standalone CUDA project instead of CPU" OFF)
 # Preserve build-cpu/icp_run and build-gpu/icp_run for root-level builds.
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
-enable_testing()
 if(ICP_ENABLE_CUDA)
   add_subdirectory(src_gpu)
 else()
