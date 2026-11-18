@@ -4,49 +4,26 @@ Align two LiDAR point clouds using point-to-point ICP, then accelerate the same
 five-stage algorithm with native CUDA. The CPU implementation provides the
 reference for evaluating CUDA correctness and performance.
 
-![Vanilla ICP registration before and after](docs/images/vanilla-registration.png)
-
-KITTI sequence 00, frame 1 aligned to frame 0. Blue: target; orange: source.
-The same local points and camera are used before and after. This example uses
-saved full-cloud CPU results from 69 iterations; the current CPU default is 20.
-See [validation results](docs/CPU_PAIR_VALIDATION.md) for pose errors and settings.
+![Vanilla ICP registration over 20 iterations](docs/images/vanilla-iterations.gif)
 
 ## Results
 
-KITTI sequence 00, frame 1 → 0, all 124,605 source and 124,668 target points,
-20 iterations, identity initialization, 1 m cutoff. CPU: one serial run on
-AMD EPYC 9534. GPU: median of three runs on NVIDIA L40S. Times measure the
-complete registration call, excluding file loading and compilation.
+KITTI sequence 00, frame 1 → 0, 124,605 source points and 124,668 target points.
+20 iterations. CPU: AMD EPYC 9534. GPU: NVIDIA L40S.
 
 <!-- execution-time-results:start -->
 
-| Method | Execution time (ms) | Runs | Statistic |
-| --- | ---: | ---: | --- |
-| CPU serial | 315,393.125 | 1 | single |
-| CUDA brute-force | 442.488 | 3 | median |
-| CUDA tiled | 312.209 | 3 | median |
+| Method | Execution time (ms) | Translation error | Rotation error | Inliers |
+| --- | ---: | ---: | ---: | ---: |
+| CPU serial | 315,393.125 | 24.08 cm | 0.12556° | 123,329 |
+| CUDA brute-force | 442.488 | 24.08 cm | 0.12556° | 123,329 |
+| CUDA tiled brute-force | 312.209 | 24.08 cm | 0.12556° | 123,329 |
+| CUDA KDtree | TBD | TBD | TBD | TBD |
+| CUDA voxel-grid | TBD | TBD | TBD | TBD |
 
 ![Measured execution times](docs/images/execution_time.png)
 
 <!-- execution-time-results:end -->
-
-| Accuracy metric | CPU serial | CUDA brute-force | CUDA tiled |
-| --- | ---: | ---: | ---: |
-| Translation error | 24.08 cm | 24.08 cm | 24.08 cm |
-| Rotation error | 0.12556° | 0.12556° | 0.12556° |
-| Inliers | 123,329 | 123,329 | 123,329 |
-
-All three methods returned the same final pose, 123,329 inliers and
-0.142262415058 m RMSE at printed precision. None converged within 20 iterations.
-These are the existing measurements; KD-tree and voxel-grid remain unmeasured.
-See [accuracy, timing scopes and evidence](docs/CPU_CUDA_COMPARISON.md).
-
-The table and plot are parsed from [scripts/result.csv](scripts/result.csv).
-Regenerate them without running ICP:
-
-```sh
-python3 scripts/plot_execution_time.py
-```
 
 ## Build and run
 
@@ -110,37 +87,6 @@ on an NVIDIA L40S. See [CPU/CUDA accuracy and latency](docs/CPU_CUDA_COMPARISON.
 Historical full-cloud vanilla converged at 69 iterations; see
 [validation](docs/CPU_PAIR_VALIDATION.md).
 
-## 3D visualization
-
-```sh
-python3 scripts/visualize_registration.py
-```
-
-The script reads original `.bin` frames and an existing result JSON with
-`T_target_source`; edit SOURCE, TARGET, RESULT and OUT at its top for another run.
-It generates a 3D overview, fixed-camera close-up PNG and before/after toggle GIF
-under `scripts/result/` (generated files are ignored by Git). The GIF alternates saved endpoint poses; it does
-not replay ICP iterations. No registration is performed by the visualizer.
-The default result is the existing local full-cloud vanilla result; fresh clones
-must supply their own saved pose JSON. NumPy, Matplotlib and Pillow are required.
-
-`make cpu` invokes `tests/run_cpu.sh`; `make gpu` invokes `tests/run_gpu.sh`.
-Add `RUN=1` for execution. Previous preprocessing, benchmark, download, evaluation and Python
-unit-test scripts were removed; historical validation records refer to their
-original revisions.
-
-To animate recorded iterations instead of toggling only the endpoints:
-
-```sh
-python3 scripts/animate_iterations.py
-```
-
-Set RUN at the top to the recorded run directory. The script uses point dumps
-when available; otherwise it reconstructs coordinates from `iterations.csv`
-poses and the original binary clouds. It includes the initial state and every
-recorded update, with fixed point selection and camera, and performs no ICP run.
-The default output is `scripts/result/cpu-g5dVQq-iterations.gif`.
-
 ## Project layout
 
 ```text
@@ -157,8 +103,8 @@ data/               Local binary frames and format guide
 ```
 
 Each implementation owns its header and build files. The root CMake build selects
-CPU by default or CUDA with `-DICP_ENABLE_CUDA=ON`. Source-local C++ test folders
-were removed at the user's request; the root Python tool tests remain.
+CPU by default or CUDA with `-DICP_ENABLE_CUDA=ON`. Build and run scripts are
+in `tests/`.
 
 See [vanilla ICP design](docs/VANILLA_DESIGN.md),
 [existing CUDA optimizations](docs/VANILLA_OPTIMIZATIONS.md), and
@@ -168,67 +114,9 @@ See [vanilla ICP design](docs/VANILLA_DESIGN.md),
 Earlier implementations remain available in Git history at
 [`d46bb94`](https://github.com/sangjae4309/icp-cuda-accel/tree/d46bb9486a361bebdfdb6ab7ad84d9a561bf9b1b).
 
-## How to contribute
+## Contributing
 
-We use topic branches and pull requests, inspired by
-[gem5's contribution workflow](https://www.gem5.org/contributing).
-Our integration branch is `main` (gem5 uses `develop`). Do not push work directly
-onto `main`; submit a focused PR and obtain a teammate's review before merging.
-
-| Item | Project convention | Example |
-|---|---|---|
-| Branch | `<area>/<short-change>` in lowercase kebab-case | `integration/update-draftcode` |
-| Commit title | `<area>: <change>` | `integration: update draftcode` |
-| PR title | Same format as commit title | `integration: update draftcode` |
-
-The colon format comes from gem5's **commit** convention, not its branch naming.
-The slash-based branch convention is our project rule: Git forbids colons and
-spaces in branch names. Use areas such as `integration`, `transform`,
-`correspondence`, `statistics`, `solver`, `validation`, or `docs`.
-
-1. Pick a task from [TASKS.md](docs/TASKS.md) and coordinate its owner.
-2. Update `main`, then create a branch for that task.
-3. Implement and test the change; keep unrelated work in separate PRs.
-4. Commit, push the branch, and open a pull request targeting `main`.
-5. Describe the change and test evidence, request a teammate's review, and address
-   feedback on the same branch. Merge only after approval and applicable checks.
-
-```sh
-git switch main
-git pull --ff-only origin main
-git switch -c integration/update-draftcode
-# Edit files and run the relevant checks.
-git add <changed-files>
-git commit -m "integration: update draftcode"
-git push -u origin integration/update-draftcode
-```
-
-On GitHub, choose **Compare & pull request**, set base `main` and compare
-`integration/update-draftcode`, then use `integration: update draftcode` as the title.
-With an authenticated GitHub CLI, the equivalent is:
-
-```sh
-gh pr create --base main --head integration/update-draftcode \
-  --title "integration: update draftcode" --body-file /tmp/icp-pr.md
-```
-
-Write the PR description into `/tmp/icp-pr.md` first. See the full
-[contribution guide](docs/CONTRIBUTING.md) for validation, review, and fork workflows.
-
-Agent guidance, reusable workflows and documentation policy are routed by
-[the documentation map](docs/README.md).
-
-
-## Output fields
-
-`execution_time_ms` measures the complete registration call using the host
-monotonic clock: workspace setup, iterations, final-pose evaluation and cleanup.
-For CUDA this includes transfers and host work; it is not kernel-only timing.
-Input-file loading, build time and console printing are excluded.
-`inliers` counts original source points whose final nearest target is within the
-1 m cutoff. Matches are many-to-one and are not verified physical correspondences.
-`rmse` is computed over those final inliers. `converged=0` with `iterations=20`
-means the CPU iteration budget was exhausted before the convergence criterion.
+See [CONTRIBUTE.md](CONTRIBUTE.md).
 
 ## Iteration logs and optional point dumps
 

@@ -1,4 +1,6 @@
-method             , execution_time_ms  , min_ms        , max_ms        , runs   , statistic  , iterations
-CPU serial         , 315393.125         , 315393.125    , 315393.125    , 1      , single     , 20
-CUDA brute-force   , 442.488            , 441.354       , 484.793       , 3      , median     , 20
-CUDA tiled         , 312.209            , 311.972       , 335.569       , 3      , median     , 20
+method                   , execution_time_ms  , translation_error_cm  , rotation_error_deg  , inliers   , iterations
+CPU serial               , 315393.125         , 24.08                 , 0.12556             , 123329    , 20
+CUDA brute-force         , 442.488            , 24.08                 , 0.12556             , 123329    , 20
+CUDA tiled brute-force   , 312.209            , 24.08                 , 0.12556             , 123329    , 20
+CUDA KDtree              , TBD                , TBD                   , TBD                 , TBD       , TBD
+CUDA voxel-grid          , TBD                , TBD                   , TBD                 , TBD       , TBD

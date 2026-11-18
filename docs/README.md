@@ -17,7 +17,7 @@ project documentation. Use the guides below for source layout, design and result
 | [Team tasks](TASKS.md) | Assigned implementation boundaries |
 | [Recorded draft validation](DRAFT_VALIDATION.md) | Historical infrastructure checks and limits |
 | [Historical validation](HISTORICAL_VALIDATION.md) | Earlier verification evidence |
-| [Contributing](CONTRIBUTING.md) | Branches, reviews and validation policy |
+| [Contributing](../CONTRIBUTE.md) | Branches, reviews and validation policy |
 
 
 Detailed design and task contracts stay here. Historical validation records are

@@ -35,7 +35,7 @@ area to keep ownership clear.
 
 Start from an up-to-date `main` in a clean working tree. Create a topic branch,
 implement one coherent change, run relevant checks, and commit only intended files.
-See the commands in [README](../README.md#how-to-contribute).
+See the commands in [README](README.md#build-and-run).
 
 Collaborators may push their topic branch to this repository. Contributors without
 write access should fork, branch from the upstream `main`, push to their fork, then
@@ -52,14 +52,14 @@ Do not include unrelated changes or claim unexecuted tests passed.
 ## Validation and PR description
 
 Run CPU/GPU builds and tests inside Slurm `interactive-gpu`; use one-minute jobs
-for current small checks. Build commands are in [DRAFT.md](DRAFT.md).
+for current small checks. Build commands are in [DRAFT.md](docs/DRAFT.md).
 
 - CPU changes: Release build, CTest, and existing Python tool tests.
 - CUDA changes: inspect actual GPU/toolkit, select architecture explicitly, build
   and run GPU tests; use memcheck and synccheck where supported.
 - Documentation-only changes: verify links, examples and whitespace; no need to
   rerun algorithm tests when executable code has not changed.
-- Future algorithm changes: add applicable correctness cases from [TASKS.md](TASKS.md).
+- Future algorithm changes: add applicable correctness cases from [TASKS.md](docs/TASKS.md).
   Benchmark only after correctness with matching settings.
 
 PR descriptions should state the problem, resulting behavior, affected modules,
@@ -85,5 +85,5 @@ must be updated after a rebase, coordinate with collaborators and use
 Keep simple structs, raw pointers, explicit sizes and separate host/device functions.
 Maintain independent CPU and GPU drafts. Document buffer ownership and preserve
 column-vector, left-composition and original-source conventions in
-[DATAFLOW.md](DATAFLOW.md). Put documentation in `docs/`. Keep repository prose,
+[DATAFLOW.md](docs/DATAFLOW.md). Put documentation in `docs/`. Keep repository prose,
 comments and reports in English.
