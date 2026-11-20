@@ -45,15 +45,7 @@ if [[ "$build_system" == cmake ]]; then
         -DCMAKE_CUDA_ARCHITECTURES="$architecture"
     cmake --build build-gpu -j4
 else
-    eigen_include=${EIGEN3_INCLUDE_DIR:-}
-    if [[ -z "$eigen_include" ]]; then
-        for candidate in /usr/include/eigen3 /usr/local/include/eigen3; do
-            if [[ -f "$candidate/Eigen/Core" ]]; then
-                eigen_include=$candidate
-                break
-            fi
-        done
-    fi
+    eigen_include=${EIGEN3_INCLUDE_DIR:-third_party/eigen}
     if [[ ! -f "$eigen_include/Eigen/Core" ]]; then
         echo 'Set EIGEN3_INCLUDE_DIR to the directory containing Eigen/Core.' >&2
         exit 1
