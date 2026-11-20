@@ -26,7 +26,8 @@ Use the measured comparison below when assessing current execution evidence.
 
 Current source includes all five vanilla stages and final evaluation. CPU and
 CUDA execution was measured in the [full-cloud comparison](CPU_CUDA_COMPARISON.md);
-the later KD-tree and voxel-grid additions are unimplemented placeholders.
+the later CUDA KD-tree is an unimplemented placeholder. CUDA voxel-grid search
+is implemented but remains unmeasured.
 
 - [CPU accuracy review and saved-pose images](ICP_ACCURACY_REVIEW.md).
 

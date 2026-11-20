@@ -15,7 +15,7 @@ IcpStatus transformPointsCUDA(CudaIcpBuffers* buffers);
 IcpStatus findCorrespondencesCUDA(
     CudaIcpBuffers* buffers, CorrespondenceSearch search, float max_distance2);
 
-// FILL ME: alternative CUDA search implementations.
+// Alternative CUDA search implementations.
 IcpStatus findCorrespondencesKdTreeCUDA(
     CudaIcpBuffers* buffers, float max_distance2);
 IcpStatus findCorrespondencesVoxelGridCUDA(

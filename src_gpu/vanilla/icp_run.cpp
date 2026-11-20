@@ -51,6 +51,9 @@ IcpStatus runICP(const PointCloud* source, const PointCloud* target,
     if (s == ICP_OK) {
         s = uploadPointClouds(&buffers, source->points_h, target->points_h);
     }
+    if (s == ICP_OK && icp_opt->search == SEARCH_VOXEL_GRID) {
+        s = buildVoxelGridCUDA(&buffers, cutoff);
+    }
     bool final_converged = false;
 
     // One wall-clock interval around the complete iteration loop.

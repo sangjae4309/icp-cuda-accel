@@ -2,6 +2,8 @@
 #include <cuda_runtime.h>
 #include <cstdio>
 #include <cstdint>
+#include <cmath>
+#include <limits>
 
 static IcpStatus checked(cudaError_t e, const char* action)
 {
@@ -33,6 +35,8 @@ void freeIcpBuffers(CudaIcpBuffers* w)
     FREE(transformed_d);
     FREE(match_index_d);
     FREE(match_dist2_d);
+    FREE(voxel_heads_d);
+    FREE(voxel_next_d);
     FREE(pose_d);
     FREE(stats_d);
     FREE(centroid_partial_d);
@@ -44,8 +48,9 @@ void freeIcpBuffers(CudaIcpBuffers* w)
 IcpStatus allocateIcpBuffers(CudaIcpBuffers* w, int n, int m)
 {
     if (!w || n <= 0 || m <= 0 || w->source_d || w->target_d ||
-        w->transformed_d || w->match_index_d || w->match_dist2_d || w->pose_d ||
-        w->stats_d || w->centroid_partial_d || w->covariance_partial_d)
+        w->transformed_d || w->match_index_d || w->match_dist2_d ||
+        w->voxel_heads_d || w->voxel_next_d || w->pose_d || w->stats_d ||
+        w->centroid_partial_d || w->covariance_partial_d)
         return ICP_INVALID_INPUT;
     IcpStatus s = cudaAvailability();
     if (s != ICP_OK)
@@ -98,6 +103,37 @@ IcpStatus uploadPointClouds(
         cudaMemcpy(w->target_d, target, size_t(w->num_target) * sizeof(Point),
             cudaMemcpyHostToDevice),
         "upload target");
+}
+
+IcpStatus buildVoxelGridCUDA(CudaIcpBuffers* w, float max_distance2)
+{
+    if (!w || !w->target_d || w->num_target <= 0 ||
+        !(max_distance2 >= 0) || w->voxel_heads_d || w->voxel_next_d)
+        return ICP_INVALID_INPUT;
+    const float radius = max_distance2 > 0
+        ? std::sqrt(max_distance2)
+        : 1.0f;
+    const float voxel_size = max_distance2 > 0
+        ? std::nextafter(radius, std::numeric_limits<float>::infinity())
+        : radius;
+    IcpStatus s = checked(
+        cudaMalloc(reinterpret_cast<void**>(&w->voxel_heads_d),
+            size_t(w->num_target) * sizeof(*w->voxel_heads_d)),
+        "cudaMalloc voxel_heads_d");
+    if (s != ICP_OK)
+        return s;
+    s = checked(
+        cudaMalloc(reinterpret_cast<void**>(&w->voxel_next_d),
+            size_t(w->num_target) * sizeof(*w->voxel_next_d)),
+        "cudaMalloc voxel_next_d");
+    if (s != ICP_OK)
+        return s;
+    w->voxel_size = voxel_size;
+    w->voxel_cutoff = max_distance2;
+    s = initializeVoxelGridCUDA(w);
+    if (s == ICP_OK)
+        w->voxel_grid_ready = true;
+    return s;
 }
 
 IcpStatus uploadPose(CudaIcpBuffers* w, const Pose* p)
