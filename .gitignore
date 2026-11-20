@@ -28,9 +28,15 @@ __pycache__/
 *~
 *.swp
 
-# Keep dataset binaries local; retain format documentation
+# Include the six bundled KITTI frames and format documentation
 /data/*
 !/data/README.md
+!/data/000000.bin
+!/data/000001.bin
+!/data/000002.bin
+!/data/000003.bin
+!/data/000004.bin
+!/data/000005.bin
 /kitti/
 
 # Generated measurements and machine-specific Slurm jobs
