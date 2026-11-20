@@ -104,7 +104,7 @@ src_gpu/feature/     Future implementation boundary (currently unsupported)
 scripts/             Saved-pose 3D visualization
 tests/               CPU/GPU compile and run shell scripts
 docs/                Algorithm design, memory/thread diagrams and historical evidence
-data/               Local binary frames and format guide
+data/               Six bundled binary frames and format guide
 ```
 
 Each implementation owns its header and build files. The root CMake build selects

@@ -72,7 +72,8 @@ x y z
 
 Raw frames are copied from
 `/projects/standard/zhenman/shared/home/sangjae4309/kitti/velodyne/dataset/sequences/00/velodyne/`.
-Binary files remain local and are ignored by Git. Pose/calibration remain in the
+These six binary frames are included in Git. Other datasets remain local and
+are ignored. Pose/calibration remain in the
 shared KITTI directory and are used only for evaluation. This directory has data
 for five pairs; it does not imply that those five registrations have been run.
 
