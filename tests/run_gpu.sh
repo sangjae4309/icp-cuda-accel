@@ -68,6 +68,7 @@ else
         src_gpu/vanilla/icp_step4_solve.cpp
         src_gpu/vanilla/icp_step5_update.cpp
         src_gpu/vanilla/icp_log.cpp
+        src_gpu/vanilla/icp_kdtree_build.cpp
         src_gpu/vanilla/icp_run.cpp
         src_gpu/main.cpp
     )

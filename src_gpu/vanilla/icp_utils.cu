@@ -38,6 +38,7 @@ void freeIcpBuffers(CudaIcpBuffers* w)
     FREE(centroid_partial_d);
     FREE(covariance_partial_d);
 #undef FREE
+    freeKdTreeCUDA(w);
     *w = {};
 }
 
