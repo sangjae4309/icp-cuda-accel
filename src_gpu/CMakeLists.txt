@@ -12,6 +12,7 @@ add_library(icp_core
     vanilla/icp_step4_solve.cpp
     vanilla/icp_step5_update.cpp
     vanilla/icp_log.cpp
+    vanilla/icp_kdtree_build.cpp
     vanilla/icp_run.cpp)
 target_link_libraries(icp_core PRIVATE Eigen3::Eigen)
 target_include_directories(icp_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/common ${CMAKE_CURRENT_SOURCE_DIR}/vanilla)

@@ -4,6 +4,10 @@
 #include <cmath>
 #include <time.h>
 #include <limits>
+#include "icp.h"
+#include "icp_utils.h"
+#include "icp_log.h"
+#include "icp_kdtree.h"
 
 IcpStatus runICP(const PointCloud* source, const PointCloud* target,
     const IcpOptions* icp_opt, IcpResult* result)
@@ -50,6 +54,22 @@ IcpStatus runICP(const PointCloud* source, const PointCloud* target,
     s = allocateIcpBuffers(&buffers, source->count, target->count);
     if (s == ICP_OK) {
         s = uploadPointClouds(&buffers, source->points_h, target->points_h);
+    }
+    if (s == ICP_OK && icp_opt->search == SEARCH_KD_TREE) {
+        timespec build_start, build_end;
+        clock_gettime(CLOCK_MONOTONIC, &build_start);
+        KdTree kd_tree;
+        s = kd_tree.build(target);
+        if (s == ICP_OK) {
+            s = uploadKdTreeCUDA(&buffers, &kd_tree);
+        }
+        clock_gettime(CLOCK_MONOTONIC, &build_end);
+        if (s == ICP_OK) {
+            std::printf("kd_tree nodes=%d depth=%d build_upload_ms=%.3f\n",
+                kd_tree.count(), kd_tree.depth(),
+                (double(build_end.tv_sec) - double(build_start.tv_sec)) * 1000.0 +
+                    (double(build_end.tv_nsec) - double(build_start.tv_nsec)) / 1e6);
+        }
     }
     bool final_converged = false;
 

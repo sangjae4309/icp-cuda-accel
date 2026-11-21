@@ -2,6 +2,8 @@
 #include "icp.h"
 #include <cuda_runtime.h>
 #include <cstdio>
+#include <cstdint>
+class KdTree;
 
 #define BLOCK_SIZE 256
 
@@ -26,7 +28,14 @@ struct CudaIcpBuffers
     IcpStatistics* stats_d;
     CentroidPartial* centroid_partial_d;
     CovariancePartial* covariance_partial_d;
+    Point* kd_points_d;          
+    int* kd_indices_d;           
+    std::uint8_t* kd_axes_d;     
+    int kd_count;                
 };
+
+IcpStatus uploadKdTreeCUDA(CudaIcpBuffers* buffers, const KdTree* tree);
+void freeKdTreeCUDA(CudaIcpBuffers* buffers);
 
 IcpStatus cudaAvailability();
 IcpStatus allocateIcpBuffers(CudaIcpBuffers* buffers, int n, int m);
