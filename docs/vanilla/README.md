@@ -83,7 +83,12 @@ src_gpu/vanilla/
 
 CPU retains the corresponding numbered .cpp stages and its own icp_log files.
 The GPU uses CudaIcpBuffers with allocateIcpBuffers/freeIcpBuffers; its selectable
-search method is independent of execution target. There is no CPU fallback or
+search method is independent of execution target. CUDA voxel-grid correspondence
+search builds a target-point hash grid once per registration, using a cell width
+just above the maximum correspondence distance; points without an in-cutoff
+candidate use an exhaustive fallback to retain the nearest-distance output.
+KD-tree remains unimplemented.
+There is no CPU fallback or
 duplicate CPU gold source in the CUDA library. Device arithmetic, barriers,
 launch geometry, precision flags and error checks were preserved. Renaming these
 files does not create a different GPU architecture or demonstrate a speedup.

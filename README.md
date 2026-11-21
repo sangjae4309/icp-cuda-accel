@@ -33,7 +33,8 @@ evaluation are excluded on both targets. One run per method.
 make cpu RUN=1                         # CPU vanilla, brute-force search
 make gpu SEARCH=brute-force RUN=1      # CUDA naive brute force
 make gpu SEARCH=tiled RUN=1            # CUDA shared-memory tiled search
-make gpu SEARCH=all RUN=1              # Run both CUDA searches, one after another
+make gpu SEARCH=all RUN=1              # Run naive and tiled searches
+make gpu SEARCH=voxel-grid RUN=1       # CUDA voxel-grid correspondence search
 ```
 
 Omit `RUN=1` to compile only. `make cuda` is an alias for `make gpu`.
@@ -199,18 +200,23 @@ Search selection is at runtime, without `#ifdef` implementation branches:
 | brute-force | cuda-naive | implemented |
 | tiled | cuda-tiled | implemented |
 | kd-tree | cuda-kd-tree | FILL ME; ICP_NOT_IMPLEMENTED |
-| voxel-grid | cuda-voxel-grid | FILL ME; ICP_NOT_IMPLEMENTED |
+| voxel-grid | cuda-voxel-grid | implemented; opt-in |
 
-`SEARCH=all` runs only the implemented brute-force and tiled searches. The two
-placeholder functions are in `src_gpu/vanilla/icp_step2_kdtree.cu` and
-`icp_step2_voxel_grid.cu`. They do not perform a search or return a successful
-registration. Select them explicitly to enter the placeholder path:
+`SEARCH=all` runs the brute-force and tiled searches. Voxel-grid is currently
+opt-in; it builds a target hash grid once per registration and searches the
+27 cells around each transformed source point. Cell width is just above the
+configured maximum correspondence distance. If no candidate is within that
+cutoff, it scans the target cloud to preserve the exact nearest distance for the
+rejected point.
+The KD-tree function remains a placeholder in
+`src_gpu/vanilla/icp_step2_kdtree.cu`; selecting it returns
+`ICP_NOT_IMPLEMENTED`:
 
 ```sh
 make gpu SEARCH=kd-tree RUN=1
-make gpu SEARCH=voxel-grid RUN=1
 ```
 
-These are CUDA vanilla stubs, independent of the existing CPU feature KD-tree.
-No build or execution was performed for this placeholder addition; earlier
-CPU/CUDA comparison results describe the preceding implementation revision.
+The voxel-grid and brute-force searches preserve the smallest-target-index tie
+rule. Voxel-grid runtime and accuracy results are not yet measured. This CUDA
+search is independent of the existing CPU feature KD-tree.
+The benchmark table above does not yet include voxel-grid measurements.

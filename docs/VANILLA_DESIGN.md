@@ -10,10 +10,15 @@ pages 6–9. Feature-based preprocessing and optimization (pages 10–12) are de
 
 1. **Transform (page 6).** Recompute `x_i = R_k p_i + t_k` from immutable original
    source. Evaluate using double pose arithmetic and cast each coordinate to float.
-2. **Correspondence (page 7).** Exhaustively scan all target points. Minimize float
-   squared distance; ascending indices and strict `<` preserve smallest-index ties.
-   Many source points may select the same target. Accept `distance² <= cutoff²`;
-   rejected entries have index -1. Naive and tiled search are the same algorithm.
+2. **Correspondence (page 7).** Minimize float squared distance; many source points
+   may select the same target. Naive and tiled search scan all targets. CUDA
+   voxel-grid search hashes targets once, with cell width just above the configured
+   maximum correspondence distance, then scans the source point's 27 neighboring
+   cells. This contains every possible in-cutoff match; if there is none, it scans
+   all targets to preserve the exact nearest-distance output for rejected points.
+   Accept `distance² <= cutoff²`;
+   rejected entries have index -1. All searches preserve the smallest-target-index
+   tie rule.
 3. **Statistics (page 8).** Over valid matches, accumulate count K, SSE and both
    coordinate sums in double. Divide sums by K for centroids. In a second pass,
    accumulate `H = sum((x-mu_x)*(q-mu_q)^T)` in double. Count repeated target
@@ -94,10 +99,14 @@ flowchart TB
 
 ## CUDA threads and blocks
 
-Existing transform and search use 256 threads per block, eight warps. Thread
+Existing transform and brute-force searches use 256 threads per block, eight warps. Thread
 `i=blockIdx.x*256+threadIdx.x` owns source i. Transform has no shared memory.
 Tiled search holds one source and its running best candidate per thread, and
 loads 256 target points cooperatively into 3072 bytes of shared memory per block.
+Voxel-grid construction and queries also use one thread per target/source point;
+the target hash heads and per-target linked-list entries are allocated once for a
+registration. Query chains filter hash collisions by exact integer voxel
+coordinates.
 
 ```mermaid
 flowchart TD

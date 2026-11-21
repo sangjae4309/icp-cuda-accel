@@ -24,6 +24,10 @@ struct CudaIcpBuffers
     Point *source_d, *target_d, *transformed_d;
     int* match_index_d;
     float* match_dist2_d;
+    int* voxel_heads_d;
+    int* voxel_next_d;
+    float voxel_size, voxel_cutoff;
+    bool voxel_grid_ready;
     Pose* pose_d;
     IcpStatistics* stats_d;
     CentroidPartial* centroid_partial_d;
@@ -40,8 +44,10 @@ void freeKdTreeCUDA(CudaIcpBuffers* buffers);
 IcpStatus cudaAvailability();
 IcpStatus allocateIcpBuffers(CudaIcpBuffers* buffers, int n, int m);
 void freeIcpBuffers(CudaIcpBuffers* buffers);
+IcpStatus initializeVoxelGridCUDA(CudaIcpBuffers* buffers);
 IcpStatus uploadPointClouds(
     CudaIcpBuffers* buffers, const Point* source, const Point* target);
+IcpStatus buildVoxelGridCUDA(CudaIcpBuffers* buffers, float max_distance2);
 IcpStatus uploadPose(CudaIcpBuffers* buffers, const Pose* pose);
 IcpStatus downloadStatistics(
     const CudaIcpBuffers* buffers, IcpStatistics* stats);
