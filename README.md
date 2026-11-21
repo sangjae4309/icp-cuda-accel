@@ -60,11 +60,24 @@ Each invocation saves build and execution output to a uniquely named log under
 `scripts/result/`. Earlier result folders were also moved there; paths recorded
 inside historical evidence refer to their original locations.
 
-A C++17 compiler, CMake >=3.18 and Eigen3 are required. GPU builds additionally
-require an NVIDIA GPU, driver and compatible CUDA toolkit. `nvcc` is found on
-PATH; set `CUDACXX` if needed. If Eigen is outside the standard search paths,
-set `CMAKE_PREFIX_PATH` to its installation prefix. No cluster-specific paths
-are embedded in the scripts.
+A C++17 compiler is required. Eigen 3.4.0 headers are bundled in
+[`third_party/eigen/`](third_party/eigen/README.md), including their licenses.
+They are included in GitHub Download ZIP as well as Git clones; no separate
+Eigen installation or download is needed. CPU builds require CMake >=3.18.
+GPU builds use CMake >=3.18 when available, or compile directly with `nvcc`
+when CMake is absent. Set `BUILD_SYSTEM=direct` to force the direct GPU build.
+GPU builds additionally require an NVIDIA GPU, driver and compatible CUDA
+toolkit. `nvcc` is found on PATH; set `CUDACXX` if needed. No cluster-specific
+paths are embedded in the scripts. CPU/GPU CMake builds and direct GPU builds
+use the bundled Eigen headers by default. Direct GPU builds optionally accept
+`EIGEN3_INCLUDE_DIR` to use another directory containing `Eigen/Core`.
+
+For a server without CMake (P100, architecture 60):
+
+```sh
+CUDACXX=/usr/local/cuda/bin/nvcc CUDA_ARCHITECTURES=60 \
+    BUILD_SYSTEM=direct make gpu SEARCH=all RUN=1
+```
 
 The GPU architecture is detected from the first GPU reported by `nvidia-smi`;
 set `CUDA_ARCHITECTURES` to override it (for example, `86`).
